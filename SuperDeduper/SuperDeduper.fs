@@ -1,4 +1,4 @@
-module asdf
+module SuperDeduper
 
 [<EntryPoint>]
 let main argv =
