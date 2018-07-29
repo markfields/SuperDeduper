@@ -43,19 +43,16 @@ module Main =
     hash: string;
   }
 
-  type FileTreeNode
-  with
-    static member FromFileSystemInfo (fsi: FileSystemInfo) =
-      // Hashing NYI
-      match fsi with
-      | :? DirectoryInfo as di -> Directory { path = di.FullName; hash = ""; children = di.GetFileSystemInfos(); } |> Result.Ok
-      | :? FileInfo as fi -> File { path = fi.FullName; hash = ""; } |> Result.Ok
-      | _ -> Result.Error "Unrecognized FileSystemInfo subtype"
+  let printLongPath (di:DirectoryInfo) =
+    if di.FullName.Length > 200
+    then printfn "%A" di.FullName
+    else ()
 
   let rec buildSubtree (fsi: FileSystemInfo): Result<FileTreeNode, string> =
     //** Hashing NYI
     match fsi with
     | :? DirectoryInfo as di ->
+      di |> printLongPath
       result {
         let! childNodes =
           di.GetFileSystemInfos()
