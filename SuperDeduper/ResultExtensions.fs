@@ -7,6 +7,13 @@ namespace SuperDeduper
   module ResultExtensions =
     open ResultOperators
 
+    let allOkOrElse (aggregateError: 'b): Result<'a, 'b> list -> Result<'a list, 'b> =
+      let folder (list: Result<'a list, 'b>) (next: Result<'a, 'b>) = 
+        match list, next with
+        | Ok l, Ok n -> n::l |> Result.Ok
+        | _, _ -> Result.Error aggregateError
+      List.fold folder (Result.Ok [])
+
     type ResultBuilder() =
 
       member this.Bind(option, mapping) = option >>= mapping

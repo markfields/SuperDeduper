@@ -33,6 +33,7 @@ module Main =
   type FileTreeNode =
     | Directory of DirectoryNode
     | File of FileNode
+    | TooLong of int
   and DirectoryNode = {
     path: string;
     hash: string;
@@ -43,33 +44,26 @@ module Main =
     hash: string;
   }
 
-  let printLongPath (di:DirectoryInfo) =
-    if di.FullName.Length > 200
-    then printfn "%A" di.FullName
-    else ()
-
   let rec buildSubtree (fsi: FileSystemInfo): Result<FileTreeNode, string> =
-    //** Hashing NYI
-    match fsi with
-    | :? DirectoryInfo as di ->
-      di |> printLongPath
-      result {
-        let! childNodes =
-          di.GetFileSystemInfos()
-          |> List.ofArray
-          |> List.map buildSubtree
-          |> List.fold
-              (fun (list: Result<FileTreeNode list, string>) (next: Result<FileTreeNode, string>) ->
-                match list, next with
-                | Ok l, Ok n -> n::l |> Result.Ok
-                | _, _ -> Result.Error "Invalid node in subtree"
-              )
-              (Result.Ok [])
-        
-        return Directory { path = di.FullName; hash = ""; children = childNodes; }
-      }
-    | :? FileInfo as fi -> File { path = fi.FullName; hash = ""; } |> Result.Ok
-    | _ -> Result.Error "Unrecognized FileSystemInfo subtype"    
+    if fsi.FullName.Length >= 248
+    then
+      printfn "%A" fsi.FullName
+      TooLong fsi.FullName.Length |> Result.Ok
+    else
+      //** Hashing NYI
+      match fsi with
+      | :? DirectoryInfo as di ->
+        result {
+          let! childNodes =
+            di.GetFileSystemInfos()
+            |> List.ofArray
+            |> List.map buildSubtree
+            |> allOkOrElse "Invalid node in subtree"
+          
+          return Directory { path = di.FullName; hash = ""; children = childNodes; }
+        }
+      | :? FileInfo as fi -> File { path = fi.FullName; hash = ""; } |> Result.Ok
+      | _ -> Result.Error "Unrecognized FileSystemInfo subtype"    
 
   [<EntryPoint>]
   let main argv =
