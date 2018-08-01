@@ -65,12 +65,22 @@ module Main =
       | :? FileInfo as fi -> File { path = fi.FullName; hash = ""; } |> Result.Ok
       | _ -> Result.Error "Unrecognized FileSystemInfo subtype"    
 
+  let printFileTree (root: FileTreeNode) =
+    let printTabs = List.fold (fun _ s -> printf "%s" s) ()
+    let rec printSubtree (tabs: string list) = function
+      | Directory dir -> printTabs tabs; printfn "%s" dir.path; dir.children |> (List.map (printSubtree <| "  "::tabs)) |> ignore
+      | File _ -> printTabs tabs; printfn "f";
+      | TooLong _ -> printTabs tabs; printfn "\\\\TOO LONG\\\\";
+    root |> printSubtree []
+
   [<EntryPoint>]
   let main argv =
     printfn "START: %A" System.DateTime.Now
     result {
       let! (rootInfo) = argv |> parseCommandArgs
       let! tree = rootInfo |> buildSubtree
+      printfn "TREE: %A" System.DateTime.Now
+      tree |> printFileTree
       return ()
     } |> ignore
     printfn "END: %A" System.DateTime.Now
