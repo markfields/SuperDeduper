@@ -67,6 +67,13 @@ module Main =
     with
       _ -> "CANNOTREAD"
 
+  let combineHashes (childNodes: FileTreeNode list) =
+    let folder (sb:StringBuilder) (node: FileTreeNode) = sb.Append(node.Hash)
+    let computeBuilderHash (sb: StringBuilder) = sb.ToString() |> hashMap.ComputeHash
+    childNodes
+    |> List.fold folder (new StringBuilder())
+    |> computeBuilderHash
+
   let rec buildSubtree (fsi: FileSystemInfo): Result<FileTreeNode, string> =
     if fsi.FullName.Length >= 248
     then
@@ -83,7 +90,7 @@ module Main =
             |> allOkOrElse "Invalid node in subtree"
 
           let path = di.FullName
-          let hash = childNodes |> List.fold (fun (sb:StringBuilder) (node: FileTreeNode) -> sb.Append(node.Hash)) (new StringBuilder()) |> (fun (sb:StringBuilder) -> sb.ToString()) |> hashMap.ComputeHash
+          let hash = childNodes |> combineHashes
           let directory = Directory { path = path; hash = hash; children = childNodes; }
 
           hashMap.AddItem hash path
