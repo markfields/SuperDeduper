@@ -1,7 +1,9 @@
 namespace SuperDeduper
 
+open System
 open System.IO
 open System.Security.Cryptography
+open System.Text
 
 module Main =
   let parseCommandArgs argv =
@@ -18,6 +20,11 @@ module Main =
   type HashMap() =
     let dict = new System.Collections.Generic.Dictionary<string, string list>()
 
+    let sha1 = SHA1.Create()
+
+    member this.ComputeHash: string -> string = Encoding.ASCII.GetBytes >> sha1.ComputeHash >> Convert.ToBase64String
+    member this.ComputeFileHash: FileStream -> string = sha1.ComputeHash >> Convert.ToBase64String
+
     member this.AddItem (hash: string) (item: string) =
       let items = 
         if dict.ContainsKey hash
@@ -29,6 +36,8 @@ module Main =
       if dict.ContainsKey hash
       then Some dict.[hash]
       else None
+
+  let hashMap = HashMap()
 
   type FileTreeNode =
     | Directory of DirectoryNode
@@ -44,13 +53,26 @@ module Main =
     hash: string;
   }
 
+  type FileTreeNode
+  with
+    member node.Hash = 
+      match node with
+      | Directory dn -> dn.hash
+      | File fn -> fn.hash
+      | TooLong _ -> ""
+
+  let hashFile (fi: FileInfo): string =
+    try
+      fi.OpenRead() |> hashMap.ComputeFileHash
+    with
+      _ -> "CANNOTREAD"
+
   let rec buildSubtree (fsi: FileSystemInfo): Result<FileTreeNode, string> =
     if fsi.FullName.Length >= 248
     then
       printfn "%A" fsi.FullName
       TooLong fsi.FullName.Length |> Result.Ok
     else
-      //** Hashing NYI
       match fsi with
       | :? DirectoryInfo as di ->
         result {
@@ -59,17 +81,27 @@ module Main =
             |> List.ofArray
             |> List.map buildSubtree
             |> allOkOrElse "Invalid node in subtree"
-          
-          return Directory { path = di.FullName; hash = ""; children = childNodes; }
+
+          let path = di.FullName
+          let hash = childNodes |> List.fold (fun (sb:StringBuilder) (node: FileTreeNode) -> sb.Append(node.Hash)) (new StringBuilder()) |> (fun (sb:StringBuilder) -> sb.ToString()) |> hashMap.ComputeHash
+          let directory = Directory { path = path; hash = hash; children = childNodes; }
+
+          hashMap.AddItem hash path
+          return directory
         }
-      | :? FileInfo as fi -> File { path = fi.FullName; hash = ""; } |> Result.Ok
+      | :? FileInfo as fi ->
+        let path = fi.FullName
+        let hash = fi |> hashFile
+        let file = File { path = path; hash = hash; } |> Result.Ok
+        hashMap.AddItem hash path
+        file
       | _ -> Result.Error "Unrecognized FileSystemInfo subtype"    
 
   let printFileTree (root: FileTreeNode) =
     let printTabs = List.fold (fun _ s -> printf "%s" s) ()
     let rec printSubtree (tabs: string list) = function
-      | Directory dir -> printTabs tabs; printfn "%s" dir.path; dir.children |> (List.map (printSubtree <| "  "::tabs)) |> ignore
-      | File _ -> printTabs tabs; printfn "f";
+      | Directory dir -> printTabs tabs; printfn "%s  %s" dir.hash dir.path; dir.children |> (List.map (printSubtree <| "  "::tabs)) |> ignore
+      | File file -> printTabs tabs; printfn "%s" file.hash;
       | TooLong _ -> printTabs tabs; printfn "\\\\TOO LONG\\\\";
     root |> printSubtree []
 
