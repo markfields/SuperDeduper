@@ -55,6 +55,11 @@ module Main =
 
   type FileTreeNode
   with
+    member node.Path = 
+      match node with
+      | Directory dn -> dn.path
+      | File fn -> fn.path
+      | TooLong _ -> ""
     member node.Hash = 
       match node with
       | Directory dn -> dn.hash
@@ -111,6 +116,37 @@ module Main =
       | File file -> printTabs tabs; printfn "%s" file.hash;
       | TooLong _ -> printTabs tabs; printfn "\\\\TOO LONG\\\\";
     root |> printSubtree []
+
+  type FileDagNode = {
+    hash: string;
+    mutable parentLinks: FileDagLink list;
+    children: FileDagNode list;
+  }
+  and FileDagLink = {
+    parent: FileDagNode;
+    mutable childPaths: string list
+  }
+
+  let dedupeTree (root: FileTreeNode): FileDagNode =
+    let dedupeSubtree = ()
+    
+    
+    let dagRoot = {
+      hash = root.Hash;
+      parentLinks = [];
+      children = [];
+    }
+    let superRoot = {
+      hash = "";
+      parentLinks = [];
+      children = [dagRoot]
+    }
+    dagRoot.parentLinks <- {
+        parent = superRoot;
+        childPaths = [root.Path]
+    }::dagRoot.parentLinks
+    dagRoot
+    
 
   [<EntryPoint>]
   let main argv =
